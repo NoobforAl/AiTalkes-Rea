@@ -1,0 +1,27 @@
+{
+ "tool": "rea-agents (npx, latest)",
+ "provider": "llvm-objdump",
+ "recordedAt": "2026-10-28T04:55:53.107Z",
+ "target": "sample/weakcrypt.exe",
+ "steps": [
+  {
+   "label": "Disassemble",
+   "phase": 4,
+   "cmd": "rea inspect-with-objdump ./weakcrypt.exe disassemble",
+   "ms": 2829,
+   "lines": [
+    "evidence_id: ev_58977d5e756ae096…",
+    "provider:    gnu.objdump",
+    "sha256:      bb128630…78b6b0",
+    "lines:       1482 (showing 6)",
+    "140001177: 48 f7 74 24 10                divq  0x10(%rsp)",
+    "14000117c: 8b 44 24 04                   movl  0x4(%rsp), %eax",
+    "140001180: 48 8d 0d 79 1e 00 00          leaq  0x1e79(%rip), %rcx      # 0x140003000",
+    "140001187: 0f be 0c 11                   movsbl  (%rcx,%rdx), %ecx",
+    "14000118b: 31 c8                         xorl  %ecx, %eax",
+    "14000118d: 83 c0 07                      addl  $0x7, %eax"
+   ],
+   "trimmed": true
+  }
+ ]
+}

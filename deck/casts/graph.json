@@ -1,0 +1,190 @@
+{
+ "function": "weak_encrypt",
+ "address": "0x140001130",
+ "recordedAt": "2026-10-28T04:55:53.536Z",
+ "blocks": [
+  {
+   "addr": "0x140001130",
+   "jump": "0x140001150",
+   "fail": null,
+   "ins": [
+    {
+     "addr": "0x140001130",
+     "text": "sub rsp, 0x28",
+     "hot": false
+    },
+    {
+     "addr": "0x140001134",
+     "text": "mov qword [var_20h], rdx",
+     "hot": false
+    },
+    {
+     "addr": "0x140001139",
+     "text": "mov qword [var_18h], rcx",
+     "hot": false
+    },
+    {
+     "addr": "0x14000113e",
+     "text": "mov qword [var_10h], 7",
+     "hot": false
+    },
+    {
+     "addr": "0x140001147",
+     "text": "mov qword [var_8h], 0",
+     "hot": false
+    }
+   ]
+  },
+  {
+   "addr": "0x140001150",
+   "jump": "0x1400011af",
+   "fail": "0x14000115c",
+   "ins": [
+    {
+     "addr": "0x140001150",
+     "text": "mov rax, qword [var_8h]",
+     "hot": false
+    },
+    {
+     "addr": "0x140001155",
+     "text": "cmp rax, qword [var_20h]",
+     "hot": false
+    },
+    {
+     "addr": "0x14000115a",
+     "text": "jae 0x1400011af",
+     "hot": false
+    }
+   ]
+  },
+  {
+   "addr": "0x14000115c",
+   "jump": "0x140001150",
+   "fail": null,
+   "ins": [
+    {
+     "addr": "0x14000115c",
+     "text": "mov rax, qword [var_18h]",
+     "hot": false
+    },
+    {
+     "addr": "0x140001161",
+     "text": "mov rcx, qword [var_8h]",
+     "hot": false
+    },
+    {
+     "addr": "0x140001166",
+     "text": "movzx eax, byte [rax + rcx]",
+     "hot": false
+    },
+    {
+     "addr": "0x14000116a",
+     "text": "mov dword [var_4h], eax",
+     "hot": false
+    },
+    {
+     "addr": "0x14000116e",
+     "text": "mov rax, qword [var_8h]",
+     "hot": false
+    },
+    {
+     "addr": "0x140001173",
+     "text": "xor ecx, ecx",
+     "hot": false
+    },
+    {
+     "addr": "0x140001175",
+     "text": "mov edx, ecx",
+     "hot": false
+    },
+    {
+     "addr": "0x140001177",
+     "text": "div qword [var_10h]",
+     "hot": false
+    },
+    {
+     "addr": "0x14000117c",
+     "text": "mov eax, dword [var_4h]",
+     "hot": false
+    },
+    {
+     "addr": "0x140001180",
+     "text": "lea rcx, str.S3cr3t_",
+     "hot": false
+    },
+    {
+     "addr": "0x140001187",
+     "text": "movsx ecx, byte [rcx + rdx]",
+     "hot": false
+    },
+    {
+     "addr": "0x14000118b",
+     "text": "xor eax, ecx",
+     "hot": true
+    },
+    {
+     "addr": "0x14000118d",
+     "text": "add eax, 7",
+     "hot": true
+    },
+    {
+     "addr": "0x140001190",
+     "text": "mov dl, al",
+     "hot": false
+    },
+    {
+     "addr": "0x140001192",
+     "text": "mov rax, qword [var_18h]",
+     "hot": false
+    },
+    {
+     "addr": "0x140001197",
+     "text": "mov rcx, qword [var_8h]",
+     "hot": false
+    },
+    {
+     "addr": "0x14000119c",
+     "text": "mov byte [rax + rcx], dl",
+     "hot": false
+    },
+    {
+     "addr": "0x14000119f",
+     "text": "mov rax, qword [var_8h]",
+     "hot": false
+    },
+    {
+     "addr": "0x1400011a4",
+     "text": "add rax, 1",
+     "hot": false
+    },
+    {
+     "addr": "0x1400011a8",
+     "text": "mov qword [var_8h], rax",
+     "hot": false
+    },
+    {
+     "addr": "0x1400011ad",
+     "text": "jmp 0x140001150",
+     "hot": false
+    }
+   ]
+  },
+  {
+   "addr": "0x1400011af",
+   "jump": null,
+   "fail": null,
+   "ins": [
+    {
+     "addr": "0x1400011af",
+     "text": "add rsp, 0x28",
+     "hot": false
+    },
+    {
+     "addr": "0x1400011b3",
+     "text": "ret",
+     "hot": false
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reverse Engineering with AI</title>
+<link rel="stylesheet" href="node_modules/reveal.js/dist/reset.css">
+<link rel="stylesheet" href="node_modules/reveal.js/dist/reveal.css">
+<link rel="stylesheet" href="css/theme.css">
+</head>
+<body>
+<div id="chrome">
+  <div id="re-progress" class="off" aria-label="Reverse engineering progress"></div>
+  <div id="footer"><span class="label">Reverse Engineering with AI</span><span class="num"></span></div>
+</div>
+
+<div class="reveal"><div class="slides">
+
+<!-- 1 · Cover -->
+<section class="cover" data-anim="cover">
+  <div class="blob"></div><div class="blob2"></div>
+  <div class="deco" aria-hidden="true">
+    <div class="bar"><i></i> weak_encrypt</div>
+    <span class="r"><b>0x140001177</b> div qword [var_10h]</span>
+    <span class="r"><b>0x140001180</b> lea rcx, str.S3cr3t_</span>
+    <span class="r hot"><b>0x14000118b</b> xor eax, ecx</span>
+    <span class="r"><b>0x14000118d</b> add eax, 7</span>
+  </div>
+  <span class="badge tag">AI Talks · Reverse Engineering</span>
+  <h1>Reverse Engineering<br><span class="green">with AI</span></h1>
+  <p class="sub">From manual analysis with Radare2 to an AI agent with REA</p>
+</section>
+
+<!-- 1b · Contents -->
+<section class="frame" data-anim="toc">
+  <h2>Contents</h2>
+  <ol class="toc">
+    <li><a href="#/why"><span class="no">1</span><span class="tx"><b>Why reverse engineering</b><small>Understanding a program without its source</small></span></a></li>
+    <li><a href="#/target"><span class="no">2</span><span class="tx"><b>The target</b><small>A C program with weak cryptography</small></span></a></li>
+    <li><a href="#/manual"><span class="no">3</span><span class="tx"><b>Manual analysis with Radare2</b><small>Six steps, from recon to the key</small></span></a></li>
+    <li><a href="#/agent"><span class="no">4</span><span class="tx"><b>AI agent with REA</b><small>The same target, driven by one prompt</small></span></a></li>
+    <li><a href="#/hard"><span class="no">5</span><span class="tx"><b>A harder target</b><small>Stripped, static, hidden key, decoys</small></span></a></li>
+    <li><a href="#/verify"><span class="no">6</span><span class="tx"><b>Verify the agent</b><small>Risks and mitigations</small></span></a></li>
+    <li><a href="#/summary"><span class="no">7</span><span class="tx"><b>Summary</b><small>Manual, agent, hybrid</small></span></a></li>
+  </ol>
+</section>
+
+<!-- 2 · Why -->
+<section id="why" class="frame" data-anim="stagger">
+  <h2>Reverse engineering: understanding without source code</h2>
+  <div class="cards">
+    <div class="card"><h3>1 · We read the binary</h3><p>All we have is an executable; there is no source.</p></div>
+    <div class="card"><h3>2 · We recover the behavior</h3><p>We rebuild the strings, functions and algorithm.</p></div>
+    <div class="card soft"><h3>3 · AI helps</h3><p>An agent runs the tools itself and summarizes the results.</p></div>
+  </div>
+  <div class="callout">Today we take one target apart twice: <span class="green">once by hand, once with an agent.</span></div>
+</section>
+
+<!-- 3 · Target overview -->
+<section id="target" class="frame" data-anim="stagger">
+  <h2>Target: a C program with weak cryptography</h2>
+  <div class="flow">
+    <div class="node"><b>Input</b>secret.txt</div><div class="arrow">→</div>
+    <div class="node key"><b>weak_encrypt</b>XOR with key, then +7</div><div class="arrow">→</div>
+    <div class="node"><b>Output</b>secret.enc</div>
+  </div>
+  <ul class="bullets">
+    <li>We only have the binary; we want to find the algorithm and the key</li>
+    <li>First we read the source code, then we look at the disassembly</li>
+    <li>It takes no arguments: the file names are hard-coded</li>
+  </ul>
+  <p class="muted" style="font-size:28px">Sample: sample/weakcrypt.c</p>
+</section>
+
+<!-- 3b · Source: main -->
+<section class="frame" data-anim="walk">
+  <h2>Source 1: what does the program do with files?</h2>
+  <div class="split wide-l">
+    <div class="code" data-lang="c" style="font-size:26px"><span class="ln" data-step="1">#define IN_FILE  <b>"secret.txt"</b></span><span class="ln" data-step="1">#define OUT_FILE <b>"secret.enc"</b></span><span class="ln"> </span><span class="ln">int main(void) {</span><span class="ln" data-step="2">    FILE *in = fopen(IN_FILE, <b>"rb"</b>);</span><span class="ln" data-step="3">    unsigned char buf[4096];</span><span class="ln" data-step="3">    size_t n = fread(buf, 1, sizeof buf, in);</span><span class="ln" data-step="4">    <b>weak_encrypt(buf, n);</b></span><span class="ln" data-step="5">    FILE *out = fopen(OUT_FILE, <b>"wb"</b>);</span><span class="ln" data-step="5">    fwrite(buf, 1, n, out);</span><span class="ln">    ...</span><span class="ln">}</span></div>
+    <ul class="bullets caps">
+      <li data-step="1">No arguments: fixed file names</li>
+      <li data-step="2">Opens <span class="green">secret.txt</span> in binary mode</li>
+      <li data-step="3">Reads up to 4096 bytes into a buffer</li>
+      <li data-step="4">Encrypts the buffer <span class="green">in place</span></li>
+      <li data-step="5">Writes the result to <span class="green">secret.enc</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 3c · Source: weak_encrypt -->
+<section class="frame" data-anim="walk">
+  <h2>Source 2: the weak encryption</h2>
+  <div class="split wide-l" style="grid-template-columns: 1.5fr 1fr">
+    <div class="code" data-lang="c" style="font-size:25px"><span class="ln" data-step="1">static const char KEY[] = <b>"S3cr3t!"</b>;</span><span class="ln"> </span><span class="ln">static void weak_encrypt(unsigned char *buf, size_t len) {</span><span class="ln" data-step="2">    size_t klen = strlen(KEY);</span><span class="ln" data-step="3">    for (size_t i = 0; i &lt; len; i++) {</span><span class="ln" data-step="4">        buf[i] = (unsigned char)((buf[i] ^ KEY[i % klen]) + 7);</span><span class="ln">    }</span><span class="ln">}</span></div>
+    <ul class="bullets caps">
+      <li data-step="1">The key is constant and stays inside the binary</li>
+      <li data-step="2">Key length: 7 bytes</li>
+      <li data-step="3">A loop over every byte</li>
+      <li data-step="4">XOR with a repeating key, then +7</li>
+    </ul>
+  </div>
+  <div class="callout">Why weak? <span class="green">The key is short, fixed and repeating; both operations are reversible.</span></div>
+</section>
+
+<!-- 3d · After compile -->
+<section class="frame" data-anim="map">
+  <h2>After compiling: the same code as disassembly</h2>
+  <div class="maphead"><span>Source (C)</span><span></span><span>Disassembly (radare2)</span></div>
+  <div class="maprow"><div class="ltr">klen = strlen(KEY)</div><div class="arrow">→</div><div class="ltr hlc">mov qword [var_10h], 7</div></div>
+  <div class="maprow"><div class="ltr">i % klen</div><div class="arrow">→</div><div class="ltr hlc">div qword [var_10h]</div></div>
+  <div class="maprow"><div class="ltr">KEY[...]</div><div class="arrow">→</div><div class="ltr hlc">lea rcx, str.S3cr3t_</div></div>
+  <div class="maprow"><div class="ltr">buf[i] ^ KEY[..]</div><div class="arrow">→</div><div class="ltr hlc">xor eax, ecx</div></div>
+  <div class="maprow"><div class="ltr">... + 7</div><div class="arrow">→</div><div class="ltr hlc">add eax, 7</div></div>
+  <div class="callout">The compiler turned <code>strlen(KEY)</code> into <span class="green">7</span> at build time.</div>
+</section>
+
+<!-- 4 · Divider 1 -->
+<section id="manual" class="divider" data-anim="divider">
+  <div class="blob"></div>
+  <div class="big-n">1</div>
+  <h2>Manual analysis with <span class="green">Radare2</span></h2>
+  <p class="muted">Six steps, six commands, one human</p>
+</section>
+
+<!-- 4b · Recording: radare2 -->
+<section class="frame" data-anim="cast" data-cast="manual" data-phase="1">
+  <h2>Recording: a real radare2 session</h2>
+  <div class="term"><div class="bar"><i></i> <span class="cast-title">r2</span></div><div class="body cast-body"></div></div>
+  <p class="muted cast-meta" style="font-size:28px"></p>
+</section>
+
+<!-- 5 · Recon + strings -->
+<section class="frame" data-anim="term-recon" data-phase="1">
+  <h2>Steps 1 and 2: recon and strings</h2>
+  <div class="term"><div class="bar"><i></i> r2 weakcrypt.exe</div>
+<div class="body"><span class="cmd1"></span>
+<span class="o out1">arch     x86
+bits     64
+os       windows
+canary   false      <span class="k">← no stack canary</span>
+stripped false</span>
+<span class="cmd2"></span>
+<span class="o out2">0  0x140003000  ascii  <span class="k">S3cr3t!</span>
+1  0x140003160  ascii  open secret.txt
+2  0x140003170  ascii  open secret.enc
+3  0x140003186  ascii  encrypted %zu bytes\n</span></div></div>
+  <div class="callout out3">One suspicious string: <span class="green">S3cr3t!</span> looks like a key.</div>
+</section>
+
+<!-- 6 · Functions -->
+<section class="frame" data-anim="flow" data-phase="3">
+  <h2>Step 3: functions and execution flow</h2>
+  <div class="term"><div class="bar"><i></i> aaa ; afl</div>
+<div class="body"><span class="p">[0x140001000]&gt;</span> afl~main,fcn.140001130
+0x140001000   6   295  <span class="k">main</span>
+0x140001130   4   132  <span class="k">fcn.140001130</span></div></div>
+  <div class="flow">
+    <div class="node"><b>fopen</b>Open input</div><div class="arrow">→</div>
+    <div class="node"><b>fread</b>Read bytes</div><div class="arrow">→</div>
+    <div class="node key"><b>fcn.140001130</b>Suspicious: encrypts</div><div class="arrow">→</div>
+    <div class="node"><b>fwrite</b>Write output</div>
+  </div>
+</section>
+
+<!-- 7 · Disasm -->
+<section class="frame" data-anim="asm" data-phase="4">
+  <h2>Step 4: disassemble weak_encrypt</h2>
+  <div class="split wide-l">
+    <div class="code" data-lang="asm" style="font-size:25px"><span class="ln">0x14000113e  mov qword [var_10h], 7</span><span class="ln">0x140001147  mov qword [var_8h], 0</span><span class="ln">0x140001155  cmp rax, qword [var_20h]</span><span class="ln">0x140001166  movzx eax, byte [rax+rcx]</span><span class="ln" data-note="n1">0x140001177  div qword [var_10h]</span><span class="ln" data-note="n2">0x140001180  lea rcx, str.S3cr3t_</span><span class="ln" data-note="n3">0x14000118b  xor eax, ecx</span><span class="ln" data-note="n4">0x14000118d  add eax, 7</span><span class="ln">0x14000119c  mov byte [rax+rcx], dl</span></div>
+    <ul class="bullets notes">
+      <li class="n1">Select the key byte: i % 7</li>
+      <li class="n2">Load the constant key <span class="green">S3cr3t!</span></li>
+      <li class="n3">Combine byte and key: XOR</li>
+      <li class="n4">Then add 7. That's all!</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 7b · Control-flow graph -->
+<section class="frame" data-anim="graph" data-phase="4">
+  <h2>Step 4: the control-flow graph (<code>VV</code> in radare2)</h2>
+  <div class="cfg">
+    <div class="cfg-graph"></div>
+    <div class="cfg-notes card soft">
+      <h3>Reading the graph</h3>
+      <ul class="bullets">
+        <li><b>Entry</b>: locals are set up, key length <code>7</code>, <code>i = 0</code></li>
+        <li><b>Loop head</b>: <code>cmp</code> + <code>jae</code> test <code>i &lt; len</code></li>
+        <li><b>Loop body</b>: <code>i % 7</code>, load the key byte, <span class="green">xor</span>, <span class="green">add 7</span>, store, <code>i++</code></li>
+        <li><b>Exit</b>: return to <code>main</code></li>
+      </ul>
+      <p class="muted">Text version: <code>agf</code></p>
+    </div>
+  </div>
+</section>
+
+<!-- 8 · Decrypt -->
+<section class="frame" data-anim="decrypt" data-phase="6">
+  <h2>Steps 5 and 6: reverse the algorithm</h2>
+  <p>Decrypt: <span class="green">plain = (cipher − 7) ⊕ KEY[i % 7]</span></p>
+  <div class="bytes" id="bytes"></div>
+  <div class="plain" id="plain"></div>
+</section>
+
+<!-- 9 · Divider 2 -->
+<section id="agent" class="divider" data-anim="divider">
+  <div class="blob"></div>
+  <div class="big-n">2</div>
+  <h2>AI agent with <span class="green">REA</span></h2>
+  <p class="muted">The same target, one prompt</p>
+</section>
+
+<!-- 10 · What is REA -->
+<section class="frame" data-anim="stagger">
+  <h2>REA: an MCP server for reverse engineering</h2>
+  <div class="cards">
+    <div class="card"><h3>Gives agents tools</h3><p>Any MCP-compatible agent: Claude Code · Codex · Cursor and more.</p></div>
+    <div class="card"><h3>Analysis engines</h3><p>Ghidra · IDA · Hopper<br>and objdump · Rizin (fork of radare2)</p></div>
+    <div class="card soft"><h3>Every result is evidence</h3><p>Recorded with an evidence_id and a SHA-256.</p></div>
+  </div>
+  <div class="term"><div class="bar"><i></i> install</div><div class="body"><span class="p">$</span> npx rea-agents setup</div></div>
+</section>
+
+<!-- 11 · Agent loop -->
+<section class="frame" data-anim="loop" data-phase="1">
+  <h2>The agent loop: plan, tool, evidence</h2>
+  <div class="flow">
+    <div class="node"><b>Prompt</b>"How does this binary encrypt?"</div><div class="arrow">→</div>
+    <div class="node"><b>Plan</b>Agent picks the next step</div><div class="arrow">→</div>
+    <div class="node key"><b>Tool call</b>REA tools</div><div class="arrow">→</div>
+    <div class="node"><b>Evidence</b>Output + hash</div>
+  </div>
+  <div class="callout">Steps 1 to 6 are the same; <span class="green">only the command selection is up to the agent.</span></div>
+</section>
+
+<!-- 12 · Recording: REA -->
+<section class="frame" data-anim="cast" data-cast="agent" data-phase="4">
+  <h2>Recording: a real REA run on this sample</h2>
+  <div class="term"><div class="bar"><i></i> <span class="cast-title">rea</span></div><div class="body cast-body"></div></div>
+  <p class="muted cast-meta" style="font-size:28px"></p>
+</section>
+
+<!-- 13 · Difference -->
+<section class="frame" data-anim="lanes">
+  <h2>The difference: who decides?</h2>
+  <div>
+    <div class="lane"><div class="who">Manual</div><div class="chips" data-lane="manual">
+      <span class="chip mono human">iI</span><span class="chip mono human">izz</span><span class="chip mono human">afl</span><span class="chip mono human">pdf</span><span class="chip human">Algorithm</span><span class="chip human">Decrypt</span></div></div>
+    <div class="lane"><div class="who green">Agent</div><div class="chips" data-lane="agent">
+      <span class="chip human">Prompt</span><span class="chip mono auto">iI</span><span class="chip mono auto">izz</span><span class="chip mono auto">afl</span><span class="chip mono auto">pdf</span><span class="chip auto">Report</span><span class="chip human">Review</span></div></div>
+  </div>
+  <div class="cards two">
+    <div class="card"><h3>Manual: <span class="stat" style="font-size:56px">6</span> human decisions</h3><p>Full control, but slow and repetitive.</p></div>
+    <div class="card soft"><h3>Agent: <span class="stat" style="font-size:56px">2</span> human touchpoints</h3><p>Prompt and review; everything else is automated.</p></div>
+  </div>
+</section>
+
+<!-- 13b · Hard sample -->
+<section id="hard" class="frame" data-anim="stagger">
+  <h2>Sample 2: a hard target (vault)</h2>
+  <div class="cards">
+    <div class="card"><h3>Stripped + static</h3><p>583 functions; most are libc and have no symbols.</p></div>
+    <div class="card"><h3>Hidden key</h3><p>The key is never a string; it is decoded at runtime.</p></div>
+    <div class="card soft"><h3>Custom cipher</h3><p>FNV-1a → xorshift64*<br>→ rotate + add</p></div>
+  </div>
+  <div class="callout">Decoys: fake AES-256 and S-box; <span class="green">anti-debug corrupts the key under a debugger.</span></div>
+</section>
+
+<!-- 13c · Detection toolchain -->
+<section class="frame" data-anim="stagger">
+  <h2>Detection toolchain</h2>
+  <div class="card"><table class="cmp compact">
+    <tr><td>file</td><td>ELF static, stripped</td><td>✔ Triage</td></tr>
+    <tr><td>strings</td><td>4,080 strings; only a fake key</td><td>✘ Misleading</td></tr>
+    <tr><td>entropy</td><td>6.21 → 7.92 bits/byte</td><td>✔ Packed (UPX)</td></tr>
+    <tr><td>YARA</td><td>AES S-box · FNV · xorshift</td><td>⚠ AES = decoy</td></tr>
+    <tr><td>capa</td><td>RC4 PRGA · FNV · XOR · djb2</td><td>⚠ Not RC4</td></tr>
+    <tr><td>FLOSS</td><td>Timeout &gt; 7 min</td><td>✘ Too slow (static)</td></tr>
+    <tr><td>Rizin</td><td>main @ 0x401930 · blob @ 0x4881a0</td><td>✔ Real answer</td></tr>
+  </table></div>
+</section>
+
+<!-- 14 · Cautions -->
+<section id="verify" class="frame" data-anim="stagger">
+  <h2>Agents make mistakes too; verify the evidence</h2>
+  <div class="cards two">
+    <div class="card risk"><h3>Risk</h3><ul class="bullets"><li>Claims without evidence</li><li>Never execute an unknown file</li></ul></div>
+    <div class="card soft"><h3>Mitigation</h3><ul class="bullets"><li>Every claim needs an evidence_id</li><li>Binaries only, inside a sandbox</li></ul></div>
+  </div>
+</section>
+
+<!-- 15 · Summary -->
+<section id="summary" class="frame" data-anim="stagger" data-phase="6">
+  <h2>Summary</h2>
+  <div class="cards">
+    <div class="card"><h3>Manual</h3><p>Deep understanding of every step with Radare2</p></div>
+    <div class="card soft"><h3>Agent</h3><p>Speed and repeatability with REA</p></div>
+    <div class="card"><h3>Hybrid</h3><p>The agent proposes; <span class="green">the human confirms.</span></p></div>
+  </div>
+  <p class="muted" style="font-size:28px">github.com/morluto/rea</p>
+</section>
+
+</div></div>
+<script src="node_modules/reveal.js/dist/reveal.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

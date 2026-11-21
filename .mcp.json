@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rea": {
+      "command": "docker",
+      "args": ["compose", "--progress", "quiet", "run", "--rm", "-T", "re", "rea-agents", "mcp"]
+    }
+  }
+}

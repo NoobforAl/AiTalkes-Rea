@@ -1,0 +1,85 @@
+# Reverse-engineering lab.
+#   docker compose build                         build the lab image (radare2 + r2pm plugins, Rizin, FLOSS, capa, YARA, REA)
+#   docker compose run --rm re zsh              shell inside the lab (zsh + oh-my-zsh; bash also works; targets are read-only under /work/targets)
+#   docker compose --profile build run --rm builder   rebuild sample/hard (vault, vault.upx, secret.enc)
+#   docker compose --profile build run --rm builder-go     rebuild sample/hard-go   (vault-go, secret.enc)
+#   docker compose --profile build run --rm builder-rust   rebuild sample/hard-rust (vault-rs, secret.enc)
+# Analysis containers have no network, a read-only root filesystem and no capabilities.
+
+x-lab: &lab
+  image: aitalks-re-lab
+  build: { context: ., dockerfile: docker/Dockerfile, target: lab }
+  network_mode: none
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: ["/tmp:exec", "/home/re:uid=10001,gid=10001"]
+  # Only compiled targets + ciphertexts are visible: no .c sources, no plaintext, no answer key.
+  volumes:
+    - ./sample/weakcrypt.exe:/work/targets/easy/weakcrypt.exe:ro
+    - ./sample/secret.enc:/work/targets/easy/secret.enc:ro
+    - ./sample/hard/vault:/work/targets/hard/vault:ro
+    - ./sample/hard/vault.upx:/work/targets/hard/vault.upx:ro
+    - ./sample/hard/secret.enc:/work/targets/hard/secret.enc:ro
+    - ./sample/hard-go/vault-go:/work/targets/go/vault-go:ro
+    - ./sample/hard-go/secret.enc:/work/targets/go/secret.enc:ro
+    - ./sample/hard-rust/vault-rs:/work/targets/rust/vault-rs:ro
+    - ./sample/hard-rust/secret.enc:/work/targets/rust/secret.enc:ro
+    - ./docker/rules:/opt/rules:ro
+  working_dir: /work
+
+services:
+  # Interactive shell and the REA MCP server (see .mcp.json) both run in this service.
+  re:
+    <<: *lab
+
+  # Compiles the hard sample (static, stripped, plus a UPX-packed copy) and encrypts secret.txt with it.
+  builder:
+    profiles: ["build"]
+    build: { context: ., dockerfile: docker/Dockerfile, target: builder }
+    volumes: ["./sample/hard:/work/sample/hard"]
+    working_dir: /work/sample/hard
+    user: "${UID:-0}:${GID:-0}"
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        gcc -O2 -static -s -fno-stack-protector -o vault vault.c
+        upx --best -q -o vault.upx vault >/dev/null
+        ./vault
+        ls -l vault vault.upx secret.enc
+
+  # Go and Rust variants of the hard sample: static, stripped, run in the official toolchain images.
+  builder-go:
+    profiles: ["build"]
+    image: golang:1-alpine
+    volumes: ["./sample/hard-go:/work/sample/hard-go"]
+    working_dir: /work/sample/hard-go
+    user: "${UID:-0}:${GID:-0}"
+    environment: { CGO_ENABLED: "0", GOCACHE: /tmp/gocache, GOTOOLCHAIN: local, HOME: /tmp }
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        go build -trimpath -ldflags="-s -w" -o vault-go .
+        ./vault-go
+        ls -l vault-go secret.enc
+
+  builder-rust:
+    profiles: ["build"]
+    image: rust:1-alpine
+    volumes: ["./sample/hard-rust:/work/sample/hard-rust"]
+    working_dir: /work/sample/hard-rust
+    user: "${UID:-0}:${GID:-0}"
+    environment: { CARGO_HOME: /tmp/cargo, CARGO_TARGET_DIR: /tmp/target, HOME: /tmp, RUSTFLAGS: "-C target-feature=+crt-static" }
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        cargo build --release --locked 2>/dev/null || cargo build --release
+        cp /tmp/target/release/vault-rs .
+        ./vault-rs
+        ls -l vault-rs secret.enc

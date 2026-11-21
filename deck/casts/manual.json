@@ -1,0 +1,64 @@
+{
+ "tool": "radare2 6.2.4 +1 abi:152 @ windows-x86_64",
+ "recordedAt": "2026-10-28T04:55:49.516Z",
+ "target": "sample/weakcrypt.exe",
+ "steps": [
+  {
+   "label": "Recon",
+   "phase": 1,
+   "cmd": "r2 weakcrypt.exe  ›  iI~arch,bits,os,canary,stripped",
+   "ms": 161,
+   "lines": [
+    "arch     x86",
+    "bits     64",
+    "canary   false",
+    "os       windows",
+    "stripped false"
+   ],
+   "trimmed": false
+  },
+  {
+   "label": "Strings",
+   "phase": 2,
+   "cmd": "r2 weakcrypt.exe  ›  iz~S3cr3t,secret,encrypted",
+   "ms": 159,
+   "lines": [
+    "0   0x00001600 0x140003000 7   8    .rdata  ascii S3cr3t!",
+    "1   0x00001760 0x140003160 15  16   .rdata  ascii open secret.txt",
+    "2   0x00001770 0x140003170 15  16   .rdata  ascii open secret.enc",
+    "3   0x00001786 0x140003186 20  21   .rdata  ascii encrypted %zu bytes\\n"
+   ],
+   "trimmed": false
+  },
+  {
+   "label": "Functions",
+   "phase": 3,
+   "cmd": "r2 weakcrypt.exe  ›  aaa; afl~main,fcn.140001130",
+   "ms": 231,
+   "lines": [
+    "0x140001000    6    295 main",
+    "0x140001130    4    132 fcn.140001130"
+   ],
+   "trimmed": false
+  },
+  {
+   "label": "Disassemble",
+   "phase": 4,
+   "cmd": "r2 weakcrypt.exe  ›  aaa; pdf @ 0x140001130",
+   "ms": 209,
+   "lines": [
+    "0x140001177      div qword [var_10h]",
+    "0x14000117c      mov eax, dword [var_4h]",
+    "; section..rdata",
+    "; 0x140003000",
+    "; \"S3cr3t!\"",
+    "0x140001180      lea rcx, str.S3cr3t_",
+    "0x140001187      movsx ecx, byte [rcx + rdx]",
+    "0x14000118b      xor eax, ecx",
+    "0x14000118d      add eax, 7"
+   ],
+   "trimmed": true,
+   "total": 38
+  }
+ ]
+}

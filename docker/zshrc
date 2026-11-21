@@ -1,0 +1,26 @@
+# Lab shell config (zsh + oh-my-zsh), loaded through ZDOTDIR=/opt/lab-shell.
+# oh-my-zsh is installed read-only under /opt; history and caches go to $HOME, which is a tmpfs.
+export ZSH=/opt/oh-my-zsh
+export ZSH_CACHE_DIR="$HOME/.cache/oh-my-zsh"
+export ZSH_COMPDUMP="$ZSH_CACHE_DIR/.zcompdump"
+mkdir -p "$ZSH_CACHE_DIR/completions"
+
+ZSH_THEME="robbyrussell"
+DISABLE_AUTO_UPDATE="true"
+ZSH_DISABLE_COMPFIX="true"
+plugins=(git colored-man-pages extract)
+source "$ZSH/oh-my-zsh.sh"
+
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=5000
+SAVEHIST=5000
+alias ll='ls -lah'
+# PE files (like weakcrypt.exe) need relocations applied or references do not resolve
+alias r2='r2 -e bin.relocs.apply=true'
+
+# make it obvious this is the analysis lab
+PROMPT="%F{green}[lab]%f $PROMPT"
+
+# must be last
+source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
